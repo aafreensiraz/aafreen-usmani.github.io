@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Instagram Data Viewer & PDF Exporter</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root {
+    --pink: #E1306C;
+    --purple: #833AB4;
+    --orange: #F77737;
+    --bg: #0a0a0a;
+    --surface: #141414;
+    --surface2: #1e1e1e;
+    --border: rgba(255,255,255,0.08);
+    --text: #f0f0f0;
+    --muted: #888;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+  }
+
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, #833AB4 0%, #E1306C 50%, #F77737 100%);
+    padding: 2rem;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .header::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.3);
+  }
+  .header-content { position: relative; z-index: 1; }
+  .header h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.5px; }
+  .header p { color: rgba(255,255,255,0.8); margin-top: 6px; font-size: 0.95rem; }
+  .ig-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 52px; height: 52px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #F77737, #E1306C, #833AB4);
+    margin-bottom: 1rem;
+    font-size: 1.6rem;
+  }
+
+  /* Main layout */
+  .container { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+  /* Step cards */
+  .step-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .step-label {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 0.75rem; font-weight: 600; letter-spacing: 1px;
+    text-transform: uppercase; color: var(--muted);
+    margin-bottom: 0.75rem;
+  }
+  .step-num {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--purple), var(--pink));
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 0.7rem; font-weight: 700; color: white;
+  }
+  .step-card h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.4rem; }
+  .step-card p { color: var(--muted); font-size: 0.9rem; line-height: 1.6; }
+
+  /* Drop zone */
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 2.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 1rem;
+    position: relative;
+  }
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--pink);
+    background: rgba(225,48,108,0.06);
+  }
+  .drop-zone input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .drop-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+  .drop-zone h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem; }
+  .drop-zone p { font-size: 0.85rem; color: var(--muted); }
+
+  /* Tags / badges */
+  .file-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(131,58,180,0.15); border: 1px solid rgba(131,58,180,0.3);
+    color: #c084fc; border-radius: 20px;
+    font-size: 0.8rem; padding: 4px 12px; margin: 4px;
+  }
+  .file-tag button {
+    background: none; border: none; color: inherit; cursor: pointer;
+    font-size: 1rem; line-height: 1; opacity: 0.6;
+  }
+  .file-tag button:hover { opacity: 1; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; margin-bottom: 1.5rem; }
+  .tab-btn {
+    flex: 1; padding: 0.6rem 1rem;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--muted); border-radius: 8px; cursor: pointer;
+    font-size: 0.9rem; transition: all 0.15s; font-weight: 500;
+  }
+  .tab-btn.active {
+    background: linear-gradient(135deg, var(--purple), var(--pink));
+    color: white; border-color: transparent;
+  }
+
+  /* Data preview */
+  .preview-panel { display: none; }
+  .preview-panel.active { display: block; }
+
+  .post-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 0.75rem;
+  }
+  .post-card .post-date {
+    font-size: 0.75rem; color: var(--muted); margin-bottom: 0.4rem;
+  }
+  .post-card .post-caption { font-size: 0.9rem; line-height: 1.5; }
+  .post-card .post-meta {
+    display: flex; gap: 1rem; margin-top: 0.75rem;
+    font-size: 0.75rem; color: var(--muted);
+  }
+  .post-card .post-meta span {
+    display: flex; align-items: center; gap: 4px;
+  }
+
+  .dm-thread {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 0.75rem;
+    overflow: hidden;
+  }
+  .dm-thread-header {
+    padding: 0.75rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600; font-size: 0.9rem;
+    display: flex; justify-content: space-between; align-items: center;
+    cursor: pointer;
+  }
+  .dm-thread-header:hover { background: rgba(255,255,255,0.03); }
+  .dm-count { font-size: 0.75rem; color: var(--muted); font-weight: 400; }
+  .dm-messages { padding: 0.75rem 1.25rem; display: none; }
+  .dm-messages.open { display: block; }
+  .dm-msg {
+    display: flex; gap: 8px; margin-bottom: 0.5rem; align-items: flex-start;
+  }
+  .dm-sender { font-size: 0.75rem; font-weight: 600; color: #c084fc; min-width: 80px; }
+  .dm-text { font-size: 0.85rem; line-height: 1.4; color: var(--text); flex: 1; }
+  .dm-time { font-size: 0.7rem; color: var(--muted); white-space: nowrap; }
+
+  /* Stats bar */
+  .stats-bar {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 12px; margin-bottom: 1.5rem;
+  }
+  .stat-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem;
+    text-align: center;
+  }
+  .stat-num { font-size: 1.6rem; font-weight: 700; background: linear-gradient(135deg, var(--purple), var(--pink)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .stat-label { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+
+  /* Export button */
+  .export-btn {
+    width: 100%;
+    padding: 1rem;
+    font-size: 1rem;
+    font-weight: 700;
+    border: none;
+    border-radius: var(--radius);
+    background: linear-gradient(135deg, var(--purple), var(--pink), var(--orange));
+    color: white;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+    letter-spacing: 0.5px;
+  }
+  .export-btn:hover { opacity: 0.9; }
+  .export-btn:active { transform: scale(0.99); }
+  .export-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .alert {
+    background: rgba(225,48,108,0.1); border: 1px solid rgba(225,48,108,0.25);
+    border-radius: 8px; padding: 0.75rem 1rem;
+    font-size: 0.85rem; color: #f9a8d4; margin-bottom: 1rem;
+    display: none;
+  }
+  .alert.show { display: block; }
+
+  .howto {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+    line-height: 1.8;
+  }
+  .howto strong { color: var(--text); }
+  .howto ol { margin-left: 1.2rem; }
+  .howto li { margin-bottom: 4px; }
+
+  .empty-state {
+    text-align: center; padding: 3rem 1rem;
+    color: var(--muted); font-size: 0.95rem;
+  }
+  .empty-state .big { font-size: 3rem; margin-bottom: 1rem; }
+  .chip {
+    display: inline-block; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: 20px;
+    font-size: 0.75rem; padding: 3px 10px; color: var(--muted);
+    margin-right: 4px;
+  }
+
+  .progress-wrap { margin-top: 1rem; display: none; }
+  .progress-wrap.show { display: block; }
+  .progress-bar {
+    height: 4px; background: var(--surface2); border-radius: 2px; overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(135deg, var(--purple), var(--pink));
+    transition: width 0.3s;
+  }
+  .progress-label { font-size: 0.8rem; color: var(--muted); margin-top: 6px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-content">
+    <div class="ig-icon">📸</div>
+    <h1>Instagram Data Viewer</h1>
+    <p>View your posts & messages — export everything as PDF</p>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- How to get data -->
+  <div class="step-card">
+    <div class="step-label"><span class="step-num">1</span> How to get your Instagram data</div>
+    <div class="howto">
+      <ol>
+        <li>Open Instagram → <strong>Profile → Menu (☰) → Settings → Your Activity → Download Your Information</strong></li>
+        <li>Select <strong>JSON</strong> format (preferred) or <strong>HTML</strong> format — both work!</li>
+        <li>Request download and wait for the email from Instagram</li>
+        <li>Extract the ZIP file — you'll find folders like <span class="chip">content/</span>, <span class="chip">messages/</span> with <span class="chip">.json</span> or <span class="chip">.html</span> files</li>
+        <li>Upload the JSON files below ↓</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- Upload -->
+  <div class="step-card">
+    <div class="step-label"><span class="step-num">2</span> Upload your JSON files</div>
+    <h2>Drop your Instagram JSON or HTML files</h2>
+    <p>Look for <strong>posts_1.json</strong>, <strong>message_1.json</strong> (JSON format) or <strong>messages.html</strong>, <strong>posts.html</strong> (HTML format)</p>
+
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="fileInput" multiple accept=".json,.html,.htm">
+      <div class="drop-icon">📂</div>
+      <h3>Click or drag & drop JSON files here</h3>
+      <p>posts_1.json · message_1.json · messages.html · posts.html · etc.</p>
+    </div>
+
+    <div id="fileList" style="margin-top:1rem;"></div>
+    <div class="alert" id="alert"></div>
+  </div>
+
+  <!-- Preview & Export -->
+  <div id="dataSection" style="display:none;">
+    <div class="stats-bar" id="statsBar"></div>
+
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('posts')">📷 Posts & Captions</button>
+      <button class="tab-btn" onclick="switchTab('dms')">💬 Direct Messages</button>
+    </div>
+
+    <div class="preview-panel active" id="postsPanel"></div>
+    <div class="preview-panel" id="dmsPanel"></div>
+
+    <div class="step-card" style="margin-top:2rem;">
+      <div class="step-label"><span class="step-num">3</span> Export to PDF</div>
+      <h2>Generate your PDF report</h2>
+      <p style="margin-bottom:1rem;">All your posts and messages will be saved in a clean, readable PDF.</p>
+      <button class="export-btn" onclick="exportPDF()" id="exportBtn">⬇ Export as PDF</button>
+      <div class="progress-wrap" id="progressWrap">
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="progress-label" id="progressLabel">Preparing PDF...</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const state = { posts: [], threads: [], myUsername: '' };
+let loadedFiles = {};
+
+const fileInput = document.getElementById('fileInput');
+const dropZone = document.getElementById('dropZone');
+const fileList = document.getElementById('fileList');
+const alert = document.getElementById('alert');
+const dataSection = document.getElementById('dataSection');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover'); processFiles(e.dataTransfer.files); });
+fileInput.addEventListener('change', e => processFiles(e.target.files));
+
+function showAlert(msg) {
+  alert.textContent = msg; alert.classList.add('show');
+  setTimeout(() => alert.classList.remove('show'), 4000);
+}
+
+function processFiles(files) {
+  Array.from(files).forEach(file => {
+    const reader = new FileReader();
+    const isHTML = file.name.toLowerCase().endsWith('.html') || file.name.toLowerCase().endsWith('.htm');
+    reader.onload = e => {
+      try {
+        if (isHTML) {
+          const parsed = parseHTMLFile(file.name, e.target.result);
+          if (!parsed) { showAlert(`Could not find Instagram data in ${file.name}. Make sure it's from your Instagram data download.`); return; }
+          loadedFiles[file.name] = { _html: true };
+        } else {
+          const json = JSON.parse(e.target.result);
+          loadedFiles[file.name] = json;
+          parseFile(file.name, json);
+        }
+        renderFileTags();
+        renderAll();
+      } catch(err) {
+        showAlert(`Could not read ${file.name} — ${err.message}`);
+      }
+    };
+    reader.readAsText(file, 'utf-8');
+  });
+}
+
+function parseHTMLFile(name, html) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  let found = false;
+
+  // --- Try to parse Messages HTML ---
+  // Instagram messages HTML has divs with class or structure like:
+  // participant names in h3/strong, messages in divs
+  // Strategy: look for known Instagram HTML export patterns
+
+  // Pattern 1: Instagram messages export (has _3-8y divs or similar)
+  const allDivs = doc.querySelectorAll('div');
+
+  // Find conversation title
+  let threadTitle = doc.querySelector('title') ? doc.querySelector('title').textContent.trim() : '';
+  if (!threadTitle) { const h1 = doc.querySelector('h1'); if (h1) threadTitle = h1.textContent.trim(); }
+
+  // Look for message blocks — Instagram HTML uses divs with role or specific class patterns
+  // Try multiple selectors for different Instagram export versions
+  let msgBlocks = doc.querySelectorAll('._3-8y, .pam._3-8y, [class*="message"]');
+
+  // Generic fallback: find table rows or grouped divs with sender + content + time
+  if (msgBlocks.length === 0) {
+    // Try to find structured message list
+    msgBlocks = doc.querySelectorAll('tr, li');
+  }
+
+  // Another pattern: Instagram exports all content in a specific div structure
+  // Look for divs that contain a sender name pattern
+  const messages = [];
+
+  // Try extracting from Instagram's known HTML structure
+  // Each message: div > div(sender) + div(content) + div(timestamp)
+  const candidates = doc.querySelectorAll('div > div');
+  candidates.forEach(el => {
+    const children = Array.from(el.children);
+    if (children.length >= 2) {
+      const text = el.textContent.trim();
+      // Heuristic: short first child = sender name, next = content, last = timestamp
+      const first = children[0].textContent.trim();
+      const second = children[1] ? children[1].textContent.trim() : '';
+      const last = children[children.length - 1].textContent.trim();
+      // Detect timestamp pattern
+      if (first.length < 60 && second.length > 0 && /\d{4}|\d{1,2}:\d{2}/.test(last) && first !== second) {
+        messages.push({ sender: first, text: second, timestamp: null, timeStr: last });
+        found = true;
+      }
+    }
+  });
+
+  // Fallback: extract all visible text grouped by paragraphs
+  if (messages.length === 0) {
+    // Try: look for <p> tags or <span> with content
+    const paras = doc.querySelectorAll('p, span, td');
+    let lastSender = '';
+    paras.forEach(p => {
+      const txt = p.textContent.trim();
+      if (txt.length > 0 && txt.length < 30 && p.nextElementSibling) {
+        lastSender = txt;
+      } else if (txt.length > 0 && lastSender) {
+        messages.push({ sender: lastSender, text: txt, timestamp: null, timeStr: '' });
+        lastSender = '';
+        found = true;
+      }
+    });
+  }
+
+  // Also try to extract posts from HTML
+  const postBlocks = doc.querySelectorAll('._2pin, [class*="post"], article');
+  postBlocks.forEach(block => {
+    const caption = block.querySelector('[class*="caption"], p');
+    const time = block.querySelector('time, [class*="date"]');
+    if (caption) {
+      state.posts.push({
+        caption: caption.textContent.trim(),
+        timestamp: time ? (new Date(time.getAttribute('datetime') || time.textContent).getTime() / 1000 || null) : null
+      });
+      found = true;
+    }
+  });
+
+  if (messages.length > 0) {
+    state.threads.push({
+      title: threadTitle || name.replace('.html','').replace('.htm',''),
+      messages: messages.map((m, i) => ({
+        sender: decode(m.sender),
+        text: decode(m.text),
+        timestamp: m.timestamp || (Date.now() - (messages.length - i) * 60000),
+        timeStr: m.timeStr
+      }))
+    });
+    found = true;
+  }
+
+  return found;
+}
+
+function parseFile(name, json) {
+  // Posts: posts_1.json or post_1.json
+  if (Array.isArray(json)) {
+    // Could be posts array
+    if (json[0] && (json[0].media || json[0].title !== undefined)) {
+      json.forEach(post => {
+        const caption = post.title || (post.media && post.media[0] && post.media[0].title) || '';
+        const ts = post.creation_timestamp || (post.media && post.media[0] && post.media[0].creation_timestamp);
+        const uri = (post.media && post.media[0] && post.media[0].uri) || '';
+        state.posts.push({ caption, timestamp: ts, uri });
+      });
+    }
+    // Could be messages list
+    if (json[0] && json[0].messages !== undefined) {
+      json.forEach(t => parseThread(t));
+    }
+  } else if (json && json.messages) {
+    parseThread(json);
+  } else if (json && Array.isArray(json.ig_media_or_profile_photos)) {
+    // another format
+    json.ig_media_or_profile_photos.forEach(post => {
+      const caption = post.title || '';
+      const ts = post.creation_timestamp;
+      state.posts.push({ caption, timestamp: ts });
+    });
+  }
+}
+
+function parseThread(json) {
+  if (!json.messages || !json.participants) return;
+  const title = json.title || json.participants.map(p => decode(p.name)).join(', ');
+  const msgs = json.messages.slice().reverse().map(m => ({
+    sender: decode(m.sender_name),
+    text: m.content ? decode(m.content) : (m.photos ? '[Photo]' : m.videos ? '[Video]' : '[Media]'),
+    timestamp: m.timestamp_ms
+  }));
+  if (msgs.length > 0) {
+    state.threads.push({ title: decode(title), messages: msgs });
+  }
+}
+
+function decode(str) {
+  if (!str) return '';
+  try { return decodeURIComponent(escape(str)); } catch(e) { return str; }
+}
+
+function renderFileTags() {
+  fileList.innerHTML = Object.keys(loadedFiles).map(name =>
+    `<span class="file-tag">📄 ${name} <button onclick="removeFile('${name}')">×</button></span>`
+  ).join('');
+}
+
+function removeFile(name) {
+  delete loadedFiles[name];
+  state.posts = []; state.threads = [];
+  Object.entries(loadedFiles).forEach(([n, json]) => {
+    if (!json._html) parseFile(n, json);
+  });
+  renderFileTags();
+  renderAll();
+}
+
+function renderAll() {
+  if (state.posts.length === 0 && state.threads.length === 0) {
+    dataSection.style.display = 'none'; return;
+  }
+  dataSection.style.display = 'block';
+  renderStats();
+  renderPosts();
+  renderDMs();
+}
+
+function renderStats() {
+  const totalMsgs = state.threads.reduce((a, t) => a + t.messages.length, 0);
+  document.getElementById('statsBar').innerHTML = `
+    <div class="stat-box"><div class="stat-num">${state.posts.length}</div><div class="stat-label">Posts found</div></div>
+    <div class="stat-box"><div class="stat-num">${state.threads.length}</div><div class="stat-label">DM threads</div></div>
+    <div class="stat-box"><div class="stat-num">${totalMsgs}</div><div class="stat-label">Messages</div></div>
+  `;
+}
+
+function renderPosts() {
+  const panel = document.getElementById('postsPanel');
+  if (state.posts.length === 0) {
+    panel.innerHTML = `<div class="empty-state"><div class="big">📷</div>No posts found yet.<br>Upload your <strong>posts_1.json</strong> file.</div>`;
+    return;
+  }
+  panel.innerHTML = state.posts.slice().sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).map((p, i) => {
+    const date = p.timestamp ? new Date(p.timestamp * 1000).toLocaleString() : 'Unknown date';
+    const cap = p.caption ? (p.caption.length > 300 ? p.caption.slice(0,300)+'…' : p.caption) : '(no caption)';
+    return `<div class="post-card">
+      <div class="post-date">📅 ${date}</div>
+      <div class="post-caption">${escHtml(cap)}</div>
+      ${p.uri ? `<div class="post-meta"><span>📁 ${escHtml(p.uri.split('/').pop())}</span></div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function renderDMs() {
+  const panel = document.getElementById('dmsPanel');
+  if (state.threads.length === 0) {
+    panel.innerHTML = `<div class="empty-state"><div class="big">💬</div>No messages found yet.<br>Upload <strong>message_1.json</strong> files from your messages/inbox folder.</div>`;
+    return;
+  }
+  panel.innerHTML = state.threads.map((t, ti) => {
+    const msgs = t.messages.slice(-5).map(m => {
+      const time = m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+      return `<div class="dm-msg">
+        <span class="dm-sender">${escHtml(m.sender)}</span>
+        <span class="dm-text">${escHtml(m.text)}</span>
+        <span class="dm-time">${time}</span>
+      </div>`;
+    }).join('');
+    return `<div class="dm-thread">
+      <div class="dm-thread-header" onclick="toggleThread(${ti})">
+        <span>💬 ${escHtml(t.title)}</span>
+        <span class="dm-count">${t.messages.length} messages ▾</span>
+      </div>
+      <div class="dm-messages" id="thread-${ti}">
+        ${msgs}
+        ${t.messages.length > 5 ? `<div style="font-size:0.8rem;color:var(--muted);text-align:center;padding:6px">... and ${t.messages.length - 5} more messages (all included in PDF)</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleThread(i) {
+  const el = document.getElementById('thread-' + i);
+  el.classList.toggle('open');
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', (i === 0 && tab === 'posts') || (i === 1 && tab === 'dms')));
+  document.getElementById('postsPanel').classList.toggle('active', tab === 'posts');
+  document.getElementById('dmsPanel').classList.toggle('active', tab === 'dms');
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function setProgress(pct, label) {
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressLabel').textContent = label;
+}
+
+async function exportPDF() {
+  const { jsPDF } = window.jspdf;
+  const btn = document.getElementById('exportBtn');
+  const wrap = document.getElementById('progressWrap');
+  btn.disabled = true;
+  wrap.classList.add('show');
+  setProgress(5, 'Initializing PDF...');
+  await delay(100);
+
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const margin = 48;
+  const usableW = W - margin * 2;
+  let y = margin;
+
+  function newPage() {
+    doc.addPage();
+    y = margin;
+    addPageHeader();
+  }
+
+  function checkY(needed) {
+    if (y + needed > H - 40) newPage();
+  }
+
+  function addPageHeader() {
+    doc.setFillColor(131, 58, 180);
+    doc.rect(0, 0, W, 4, 'F');
+  }
+
+  // Cover page
+  doc.setFillColor(20, 20, 20);
+  doc.rect(0, 0, W, H, 'F');
+  doc.setFillColor(131, 58, 180);
+  doc.roundedRect(margin, margin * 3, usableW, 180, 8, 8, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(28); doc.setFont('helvetica', 'bold');
+  doc.text('Instagram Data Report', W/2, margin * 3 + 60, {align:'center'});
+  doc.setFontSize(13); doc.setFont('helvetica', 'normal');
+  doc.setTextColor(200, 200, 220);
+  doc.text('Posts & Direct Messages', W/2, margin * 3 + 90, {align:'center'});
+  doc.text(`Generated: ${new Date().toLocaleString()}`, W/2, margin * 3 + 115, {align:'center'});
+  doc.setFontSize(11);
+  doc.text(`${state.posts.length} posts  ·  ${state.threads.length} DM threads  ·  ${state.threads.reduce((a,t)=>a+t.messages.length,0)} messages`, W/2, margin * 3 + 140, {align:'center'});
+
+  setProgress(15, 'Writing posts...');
+  await delay(50);
+
+  // Posts section
+  doc.addPage();
+  addPageHeader();
+  doc.setFillColor(20, 20, 20); doc.rect(0, 0, W, H, 'F');
+  y = margin + 20;
+  doc.setTextColor(225, 48, 108);
+  doc.setFontSize(20); doc.setFont('helvetica', 'bold');
+  doc.text('📷 Posts & Captions', margin, y); y += 36;
+  doc.setTextColor(180,180,180); doc.setFontSize(10); doc.setFont('helvetica','normal');
+  doc.text(`Total: ${state.posts.length} posts`, margin, y); y += 24;
+
+  const sortedPosts = state.posts.slice().sort((a,b) => (b.timestamp||0)-(a.timestamp||0));
+  for (let i = 0; i < sortedPosts.length; i++) {
+    const p = sortedPosts[i];
+    checkY(80);
+    const date = p.timestamp ? new Date(p.timestamp * 1000).toLocaleString() : 'Unknown date';
+    const cap = p.caption || '(no caption)';
+
+    doc.setFillColor(30, 30, 30);
+    const lines = doc.splitTextToSize(cap, usableW - 20);
+    const boxH = 48 + lines.length * 14;
+    checkY(boxH + 10);
+    doc.roundedRect(margin, y, usableW, boxH, 6, 6, 'F');
+    doc.setTextColor(131, 58, 180); doc.setFontSize(9); doc.setFont('helvetica','bold');
+    doc.text(`Post ${i+1}`, margin + 10, y + 16);
+    doc.setTextColor(150,150,150); doc.setFont('helvetica','normal');
+    doc.text(date, margin + usableW - 10, y + 16, {align:'right'});
+    doc.setTextColor(220,220,220); doc.setFontSize(10);
+    doc.text(lines, margin + 10, y + 32);
+    y += boxH + 12;
+
+    if (i % 10 === 9) { setProgress(15 + Math.round((i/sortedPosts.length)*30), `Writing post ${i+1}/${sortedPosts.length}...`); await delay(10); }
+  }
+
+  setProgress(55, 'Writing messages...');
+  await delay(50);
+
+  // DMs section
+  doc.addPage();
+  addPageHeader();
+  doc.setFillColor(20, 20, 20); doc.rect(0, 0, W, H, 'F');
+  y = margin + 20;
+  doc.setTextColor(131, 58, 180);
+  doc.setFontSize(20); doc.setFont('helvetica', 'bold');
+  doc.text('💬 Direct Messages', margin, y); y += 36;
+  doc.setTextColor(180,180,180); doc.setFontSize(10); doc.setFont('helvetica','normal');
+  doc.text(`${state.threads.length} conversations`, margin, y); y += 24;
+
+  for (let ti = 0; ti < state.threads.length; ti++) {
+    const thread = state.threads[ti];
+    checkY(60);
+    doc.setFillColor(40, 20, 50);
+    doc.roundedRect(margin, y, usableW, 30, 6, 6, 'F');
+    doc.setTextColor(192, 132, 252); doc.setFontSize(11); doc.setFont('helvetica','bold');
+    doc.text(thread.title.slice(0,60), margin + 10, y + 20);
+    doc.setTextColor(150,150,150); doc.setFontSize(9); doc.setFont('helvetica','normal');
+    doc.text(`${thread.messages.length} messages`, margin + usableW - 10, y + 20, {align:'right'});
+    y += 36;
+
+    for (let mi = 0; mi < thread.messages.length; mi++) {
+      const m = thread.messages[mi];
+      const timeStr = m.timestamp ? new Date(m.timestamp).toLocaleString() : '';
+      const textLines = doc.splitTextToSize(m.text.slice(0,500), usableW - 100);
+      const mBoxH = Math.max(32, textLines.length * 13 + 16);
+      checkY(mBoxH + 6);
+      doc.setFillColor(25, 25, 25);
+      doc.roundedRect(margin, y, usableW, mBoxH, 4, 4, 'F');
+      doc.setTextColor(150,100,200); doc.setFontSize(8.5); doc.setFont('helvetica','bold');
+      doc.text(m.sender.slice(0,20), margin + 8, y + 13);
+      doc.setTextColor(180,180,180); doc.setFont('helvetica','normal');
+      doc.text(timeStr, margin + usableW - 8, y + 13, {align:'right'});
+      doc.setTextColor(220,220,220); doc.setFontSize(9.5);
+      doc.text(textLines, margin + 8, y + 26);
+      y += mBoxH + 5;
+    }
+    y += 10;
+    if (ti % 3 === 2) { setProgress(55 + Math.round((ti/state.threads.length)*40), `Writing thread ${ti+1}/${state.threads.length}...`); await delay(10); }
+  }
+
+  setProgress(98, 'Saving PDF...');
+  await delay(100);
+  doc.save(`instagram_data_${Date.now()}.pdf`);
+  setProgress(100, 'Done! Check your downloads.');
+  btn.disabled = false;
+  setTimeout(() => { wrap.classList.remove('show'); setProgress(0, ''); }, 3000);
+}
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+</script>
+</body>
+</html>
